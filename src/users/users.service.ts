@@ -2,13 +2,22 @@ import { Injectable } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { User } from './users.model';
 import { Model, Types } from 'mongoose';
+import { FileService } from '../file/file.service'; // adjust path accordingly
 
 @Injectable()
 export class UsersService {
-  constructor(@InjectModel(User.name) private userModel: Model<User>) {}
+  constructor(
+    @InjectModel(User.name) private userModel: Model<User>,
+    private readonly fileService: FileService,
+  ) {}
 
-  async create(data: Partial<User>) {
-    return this.userModel.create(data);
+  async create(data: Partial<User>, avatarFile?: Express.Multer.File) {
+    const avatarPath = await this.fileService.saveAvatarFile(avatarFile);
+    return this.userModel.create({
+      ...data,
+      avatar: avatarPath,
+      tasks: [],
+    });
   }
 
   async findAll() {
@@ -19,8 +28,39 @@ export class UsersService {
     return this.userModel.findById(id).populate('tasks').exec();
   }
 
-  async update(id: string, data: Partial<User>) {
-    return this.userModel.findByIdAndUpdate(id, data, { new: true }).exec();
+  async update(
+    id: string,
+    data: Partial<User>,
+    avatarFile?: Express.Multer.File,
+  ) {
+    const user = await this.userModel.findById(id);
+
+    if (!user) {
+      throw new Error('User not found');
+    }
+
+    let updatedAvatarPath = user.avatar;
+
+    if (avatarFile) {
+      updatedAvatarPath = await this.fileService.saveAvatarFile(avatarFile);
+
+      if (user.avatar && user.avatar !== this.fileService['defaultAvatar']) {
+        await this.fileService.deleteFile(user.avatar);
+      }
+    }
+
+    const updatedUser = await this.userModel
+      .findByIdAndUpdate(
+        id,
+        {
+          ...data,
+          avatar: updatedAvatarPath,
+        },
+        { new: true },
+      )
+      .exec();
+
+    return updatedUser;
   }
 
   async delete(id: string) {

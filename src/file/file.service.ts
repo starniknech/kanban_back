@@ -38,4 +38,22 @@ export class FileService {
 
     return avatarPath;
   }
+
+  async deleteFile(avatarPath: string): Promise<void> {
+    const fullPath = path.join(
+      __dirname,
+      '..',
+      '..',
+      avatarPath.replace('/uploads', 'uploads'), // normalize leading slash
+    );
+
+    try {
+      if (fs.existsSync(fullPath)) {
+        await fs.promises.unlink(fullPath);
+      }
+    } catch (err) {
+      console.error('Failed to delete file:', err);
+      // Optionally throw or log silently
+    }
+  }
 }

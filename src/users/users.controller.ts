@@ -6,17 +6,24 @@ import {
   Delete,
   Param,
   Body,
+  UploadedFile,
+  UseInterceptors,
 } from '@nestjs/common';
+import { FileInterceptor } from '@nestjs/platform-express';
 import { UsersService } from './users.service';
-import { User } from './users.model';
+import { Express } from 'express';
 
 @Controller('users')
 export class UsersController {
   constructor(private readonly usersService: UsersService) {}
 
   @Post()
-  async create(@Body() body: Partial<User>) {
-    return this.usersService.create(body);
+  @UseInterceptors(FileInterceptor('avatar'))
+  async create(
+    @Body() body: Record<string, any>,
+    @UploadedFile() avatar: Express.Multer.File,
+  ) {
+    return this.usersService.create(body, avatar);
   }
 
   @Get()
@@ -30,8 +37,13 @@ export class UsersController {
   }
 
   @Patch(':id')
-  async update(@Param('id') id: string, @Body() body: Partial<User>) {
-    return this.usersService.update(id, body);
+  @UseInterceptors(FileInterceptor('avatar'))
+  async update(
+    @Param('id') id: string,
+    @Body() body: Record<string, any>,
+    @UploadedFile() avatar: Express.Multer.File,
+  ) {
+    return this.usersService.update(id, body, avatar);
   }
 
   @Delete(':id')

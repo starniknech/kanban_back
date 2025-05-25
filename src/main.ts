@@ -22,6 +22,9 @@ async function start() {
       }),
     );
 
+    app.use(express.json());
+    app.use(express.urlencoded({ extended: true }));
+
     app.use('/uploads', express.static(join(__dirname, '..', 'uploads')));
     app.use(cookieParser());
 
