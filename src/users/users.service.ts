@@ -2,7 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { User } from './users.model';
 import { Model, Types } from 'mongoose';
-import { FileService } from '../file/file.service'; // adjust path accordingly
+import { FileService } from '../file/file.service';
 
 @Injectable()
 export class UsersService {
@@ -28,11 +28,7 @@ export class UsersService {
     return this.userModel.findById(id).populate('tasks').exec();
   }
 
-  async update(
-    id: string,
-    data: Partial<User>,
-    avatarFile?: Express.Multer.File,
-  ) {
+  async update(id: string, data: Partial<User>, avatarFile?: Express.Multer.File) {
     const user = await this.userModel.findById(id);
 
     if (!user) {
@@ -69,11 +65,7 @@ export class UsersService {
 
   async assignTask(userId: string, taskId: string) {
     return this.userModel
-      .findByIdAndUpdate(
-        userId,
-        { $addToSet: { tasks: new Types.ObjectId(taskId) } },
-        { new: true },
-      )
+      .findByIdAndUpdate(userId, { $addToSet: { tasks: new Types.ObjectId(taskId) } }, { new: true })
       .exec();
   }
 }

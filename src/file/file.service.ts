@@ -5,13 +5,7 @@ import { v4 as uuidv4 } from 'uuid';
 
 @Injectable()
 export class FileService {
-  private readonly uploadDir = path.join(
-    __dirname,
-    '..',
-    '..',
-    'uploads',
-    'avatars',
-  );
+  private readonly uploadDir = path.join(__dirname, '..', '..', 'uploads', 'avatars');
   private readonly defaultAvatar = '/uploads/avatars/default-ava.webp';
 
   constructor() {
@@ -40,12 +34,7 @@ export class FileService {
   }
 
   async deleteFile(avatarPath: string): Promise<void> {
-    const fullPath = path.join(
-      __dirname,
-      '..',
-      '..',
-      avatarPath.replace('/uploads', 'uploads'), // normalize leading slash
-    );
+    const fullPath = path.join(__dirname, '..', '..', avatarPath.replace('/uploads', 'uploads'));
 
     try {
       if (fs.existsSync(fullPath)) {
@@ -53,7 +42,6 @@ export class FileService {
       }
     } catch (err) {
       console.error('Failed to delete file:', err);
-      // Optionally throw or log silently
     }
   }
 }
