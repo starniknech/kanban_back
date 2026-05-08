@@ -1,12 +1,22 @@
-import { NestFactory } from '@nestjs/core';
-import { AppModule } from './app.module';
+/** For Vitalii*/
+import 'dotenv/config';
+import * as dns from 'node:dns';
+/** For Vitalii*/
+
 import * as cookieParser from 'cookie-parser';
 import * as express from 'express';
 import { join } from 'path';
 import helmet from 'helmet';
+import { NestFactory } from '@nestjs/core';
+
+/** For Vitalii*/
+dns.setServers(['8.8.8.8', '1.1.1.1']);
 
 async function start() {
   try {
+    /** For Vitalii*/
+    const { AppModule } = await import('./app.module');
+
     const PORT = process.env.PORT;
     const app = await NestFactory.create(AppModule);
 
