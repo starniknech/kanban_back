@@ -7,6 +7,7 @@ import * as cookieParser from 'cookie-parser';
 import * as express from 'express';
 import { join } from 'path';
 import helmet from 'helmet';
+import { ValidationPipe } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
 
 /** For Vitalii*/
@@ -19,6 +20,13 @@ async function start() {
 
     const PORT = process.env.PORT;
     const app = await NestFactory.create(AppModule);
+
+    app.useGlobalPipes(
+      new ValidationPipe({
+        whitelist: true,
+        transform: true,
+      }),
+    );
 
     app.enableCors({
       origin: process.env.FRONTEND_URL,

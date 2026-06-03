@@ -1,20 +1,49 @@
 export type EntityId = string;
 
-export type UserRole = 'user' | 'admin';
+export enum TokenType {
+  REFRESH = 'refresh',
+}
 
-export type OAuthProvider = 'google' | 'github';
+export enum ProjectRole {
+  OWNER = 'owner',
+  ADMIN = 'admin',
+  MEMBER = 'member',
+}
 
-export type TokenType = 'refresh' | 'password-reset';
+export enum InvitationRole {
+  ADMIN = 'admin',
+  MEMBER = 'member',
+}
 
-export type ProjectRole = 'owner' | 'admin' | 'member';
+export enum InvitationStatus {
+  PENDING = 'pending',
+  ACCEPTED = 'accepted',
+  DECLINED = 'declined',
+  EXPIRED = 'expired',
+  CANCELLED = 'cancelled',
+}
 
-export type InvitationRole = Exclude<ProjectRole, 'owner'>;
+export enum TaskStatus {
+  TODO = 'todo',
+  IN_PROGRESS = 'in_progress',
+  REVIEW = 'review',
+  DONE = 'done',
+}
 
-export type InvitationStatus = 'pending' | 'accepted' | 'declined' | 'expired' | 'cancelled';
+export enum TaskPriority {
+  LOW = 'low',
+  MEDIUM = 'medium',
+  HIGH = 'high',
+  URGENT = 'urgent',
+}
 
-export type TaskStatus = 'todo' | 'in_progress' | 'review' | 'done';
-
-export type TaskPriority = 'low' | 'medium' | 'high' | 'urgent';
+export enum RealtimeEvent {
+  TASK_CREATED = 'task.created',
+  TASK_UPDATED = 'task.updated',
+  TASK_DELETED = 'task.deleted',
+  TASK_MOVED = 'task.moved',
+  PARTICIPANT_ROLES_UPDATED = 'participant.roles_updated',
+}
 
 export interface Token {
   id: EntityId;
@@ -33,10 +62,7 @@ export interface User {
   id: EntityId;
   name: string;
   email: string;
-  passwordHash?: string | null;
-  oauthProvider?: OAuthProvider | null;
-  oauthId?: string | null;
-  roles: UserRole[];
+  passwordHash: string;
   avatar?: string | null;
   createdAt: Date;
   updatedAt: Date;
@@ -87,7 +113,7 @@ export interface UserProject {
   id: EntityId;
   userId: EntityId;
   projectId: EntityId;
-  role: ProjectRole;
+  role: ProjectRole[];
   joinedAt: Date;
   createdAt: Date;
   updatedAt: Date;
@@ -103,7 +129,6 @@ export interface Invitation {
   invitedUserId?: EntityId | null;
   email: string;
   role: InvitationRole;
-  tokenHash: string;
   status: InvitationStatus;
   expiresAt: Date;
   acceptedAt?: Date | null;

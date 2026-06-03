@@ -1,47 +1,38 @@
 import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
-import { Document } from 'mongoose';
-
-export enum StatusEnum {
-  TODO = 'TODO',
-  IN_PROGRESS = 'IN_PROGRESS',
-  IN_REVIEW = 'IN_REVIEW',
-  DONE = 'DONE',
-  POSTPONED = 'POSTPONED',
-}
-
-export enum PriorityEnum {
-  LOWEST = 'LOWEST',
-  LOW = 'LOW',
-  MEDIUM = 'MEDIUM',
-  HIGH = 'HIGH',
-  CRITICAL = 'CRITICAL',
-}
+import { Document, Types } from 'mongoose';
+import { TaskPriority, TaskStatus } from '../common/enums/domain.enums';
 
 @Schema({ timestamps: true })
 export class Task extends Document {
+  @Prop({ type: Types.ObjectId, ref: 'Project', required: true, index: true })
+  projectId: Types.ObjectId;
+
   @Prop({ required: true })
   title: string;
 
   @Prop()
-  description: string;
+  description?: string;
 
-  @Prop({ type: Number })
-  estimatedTime: number;
+  @Prop({ enum: TaskStatus, default: TaskStatus.TODO })
+  status: TaskStatus;
 
-  @Prop({ type: Number, default: 0 })
-  spentTime: number;
-
-  @Prop({ enum: StatusEnum, default: StatusEnum.TODO })
-  status: StatusEnum;
-
-  @Prop({ enum: PriorityEnum, default: PriorityEnum.MEDIUM })
-  priority: PriorityEnum;
+  @Prop({ enum: TaskPriority, default: TaskPriority.MEDIUM })
+  priority: TaskPriority;
 
   @Prop({ type: Number, default: 0 })
-  completedOn: number;
+  position: number;
 
-  @Prop()
-  userId?: string;
+  @Prop({ type: Types.ObjectId, ref: 'User', required: true })
+  createdByUserId: Types.ObjectId;
+
+  @Prop({ type: Types.ObjectId, ref: 'User', default: null })
+  assignedToUserId?: Types.ObjectId | null;
+
+  @Prop({ type: Date, default: null })
+  dueDate?: Date | null;
+
+  @Prop({ type: Date, default: null })
+  completedAt?: Date | null;
 }
 
 export const TaskSchema = SchemaFactory.createForClass(Task);
