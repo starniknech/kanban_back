@@ -1,8 +1,9 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { User } from './users.model';
-import { Model, Types } from 'mongoose';
+import { Model } from 'mongoose';
 import { FileService } from '../file/file.service';
+import { UploadedFile } from '../common/types/uploaded-file.type';
 
 @Injectable()
 export class UsersService {
@@ -11,28 +12,31 @@ export class UsersService {
     private readonly fileService: FileService,
   ) {}
 
-  async create(data: Partial<User>, avatarFile?: Express.Multer.File) {
+  async create(data: Partial<User>, avatarFile?: UploadedFile) {
     const avatarPath = await this.fileService.saveAvatarFile(avatarFile);
     return this.userModel.create({
       ...data,
       avatar: avatarPath,
-      tasks: [],
     });
   }
 
   async findAll() {
-    return this.userModel.find().populate('tasks').exec();
+    return this.userModel.find().select('-passwordHash').exec();
   }
 
   async findById(id: string) {
-    return this.userModel.findById(id).populate('tasks').exec();
+    return this.userModel.findById(id).select('-passwordHash').exec();
   }
 
-  async update(id: string, data: Partial<User>, avatarFile?: Express.Multer.File) {
+  async findByEmail(email: string) {
+    return this.userModel.findOne({ email: email.toLowerCase() }).exec();
+  }
+
+  async update(id: string, data: Partial<User>, avatarFile?: UploadedFile) {
     const user = await this.userModel.findById(id);
 
     if (!user) {
-      throw new Error('User not found');
+      throw new NotFoundException('User not found');
     }
 
     let updatedAvatarPath = user.avatar;
@@ -61,11 +65,5 @@ export class UsersService {
 
   async delete(id: string) {
     return this.userModel.findByIdAndDelete(id).exec();
-  }
-
-  async assignTask(userId: string, taskId: string) {
-    return this.userModel
-      .findByIdAndUpdate(userId, { $addToSet: { tasks: new Types.ObjectId(taskId) } }, { new: true })
-      .exec();
   }
 }

@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 import * as fs from 'fs';
 import * as path from 'path';
 import { v4 as uuidv4 } from 'uuid';
+import { UploadedFile } from '../common/types/uploaded-file.type';
 
 @Injectable()
 export class FileService {
@@ -18,7 +19,7 @@ export class FileService {
     }
   }
 
-  async saveAvatarFile(avatarFile?: Express.Multer.File): Promise<string> {
+  async saveAvatarFile(avatarFile?: UploadedFile): Promise<string> {
     if (!avatarFile) {
       return this.defaultAvatar;
     }
