@@ -47,8 +47,8 @@ export class InvitationsService {
 
     const invitedUser = await this.usersService.findByEmail(data.email);
     const invitation = await this.invitationModel.create({
-      projectId: new Types.ObjectId(projectId),
-      invitedByUserId: new Types.ObjectId(userId),
+      projectId: this.toObjectId(projectId),
+      invitedByUserId: this.toObjectId(userId),
       invitedUserId: invitedUser?._id ?? null,
       email: data.email.toLowerCase(),
       role: data.role,
@@ -61,13 +61,18 @@ export class InvitationsService {
 
   async listProjectInvitations(userId: string, projectId: string) {
     await this.userProjectsService.requireRole(userId, projectId, ProjectRole.ADMIN);
-    return this.invitationModel.find({ projectId }).exec();
+    return this.invitationModel
+      .find({ projectId: this.toObjectId(projectId) })
+      .exec();
   }
 
   async listMyInvitations(userId: string, email: string) {
     return this.invitationModel
       .find({
-        $or: [{ invitedUserId: userId }, { email: email.toLowerCase() }],
+        $or: [
+          { invitedUserId: this.toObjectId(userId) },
+          { email: email.toLowerCase() },
+        ],
         status: InvitationStatus.PENDING,
       })
       .exec();
@@ -114,7 +119,10 @@ export class InvitationsService {
     await this.userProjectsService.requireRole(userId, projectId, ProjectRole.ADMIN);
 
     const invitation = await this.invitationModel
-      .findOne({ _id: invitationId, projectId })
+      .findOne({
+        _id: this.toObjectId(invitationId),
+        projectId: this.toObjectId(projectId),
+      })
       .exec();
 
     if (!invitation) {
@@ -127,7 +135,9 @@ export class InvitationsService {
   }
 
   private async getPendingInvitation(invitationId: string): Promise<Invitation> {
-    const invitation = await this.invitationModel.findById(invitationId).exec();
+    const invitation = await this.invitationModel
+      .findById(this.toObjectId(invitationId))
+      .exec();
 
     if (!invitation || invitation.status !== InvitationStatus.PENDING) {
       throw new NotFoundException('Pending invitation not found');
@@ -140,5 +150,9 @@ export class InvitationsService {
     }
 
     return invitation;
+  }
+
+  private toObjectId(id: string): Types.ObjectId {
+    return new Types.ObjectId(id);
   }
 }

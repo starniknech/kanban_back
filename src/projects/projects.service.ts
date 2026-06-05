@@ -36,17 +36,24 @@ export class ProjectsService {
   }
 
   async listForUser(userId: string) {
+    const projectIds =
+      await this.userProjectsService.listProjectIdsForUser(userId);
+
+    if (!projectIds.length) {
+      return [];
+    }
+
     return this.projectModel
-      .find({ deletedAt: null })
-      .where('_id')
-      .in(await this.userProjectsService.listProjectIdsForUser(userId))
+      .find({ _id: { $in: projectIds }, deletedAt: null })
       .exec();
   }
 
   async findById(userId: string, projectId: string) {
     await this.userProjectsService.requireMember(userId, projectId);
 
-    const project = await this.projectModel.findById(projectId).exec();
+    const project = await this.projectModel
+      .findById(new Types.ObjectId(projectId))
+      .exec();
 
     if (!project || project.deletedAt) {
       throw new NotFoundException('Project not found');
@@ -63,7 +70,7 @@ export class ProjectsService {
     await this.userProjectsService.requireRole(userId, projectId, ProjectRole.ADMIN);
 
     return this.projectModel
-      .findByIdAndUpdate(projectId, data, { new: true })
+      .findByIdAndUpdate(new Types.ObjectId(projectId), data, { new: true })
       .exec();
   }
 
@@ -71,7 +78,11 @@ export class ProjectsService {
     await this.userProjectsService.requireRole(userId, projectId, ProjectRole.OWNER);
 
     return this.projectModel
-      .findByIdAndUpdate(projectId, { deletedAt: new Date() }, { new: true })
+      .findByIdAndUpdate(
+        new Types.ObjectId(projectId),
+        { deletedAt: new Date() },
+        { new: true },
+      )
       .exec();
   }
 

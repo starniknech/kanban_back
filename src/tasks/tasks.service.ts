@@ -45,12 +45,20 @@ export class TasksService {
 
   async findAll(userId: string, projectId: string) {
     await this.userProjectsService.requireMember(userId, projectId);
-    return this.taskModel.find({ projectId }).sort({ position: 1 }).exec();
+    return this.taskModel
+      .find({ projectId: this.toObjectId(projectId) })
+      .sort({ position: 1 })
+      .exec();
   }
 
   async findById(userId: string, projectId: string, id: string) {
     await this.userProjectsService.requireMember(userId, projectId);
-    return this.taskModel.findOne({ _id: id, projectId }).exec();
+    return this.taskModel
+      .findOne({
+        _id: this.toObjectId(id),
+        projectId: this.toObjectId(projectId),
+      })
+      .exec();
   }
 
   async update(
@@ -69,7 +77,14 @@ export class TasksService {
     };
 
     const task = await this.taskModel
-      .findOneAndUpdate({ _id: id, projectId }, updateData, { new: true })
+      .findOneAndUpdate(
+        {
+          _id: this.toObjectId(id),
+          projectId: this.toObjectId(projectId),
+        },
+        updateData,
+        { new: true },
+      )
       .exec();
 
     this.realtimeGateway.emitToProject(
@@ -90,7 +105,14 @@ export class TasksService {
     await this.userProjectsService.requireMember(userId, projectId);
 
     const task = await this.taskModel
-      .findOneAndUpdate({ _id: id, projectId }, data, { new: true })
+      .findOneAndUpdate(
+        {
+          _id: this.toObjectId(id),
+          projectId: this.toObjectId(projectId),
+        },
+        data,
+        { new: true },
+      )
       .exec();
 
     this.realtimeGateway.emitToProject(
@@ -106,7 +128,10 @@ export class TasksService {
     await this.userProjectsService.requireRole(userId, projectId, ProjectRole.ADMIN);
 
     const task = await this.taskModel
-      .findOneAndDelete({ _id: id, projectId })
+      .findOneAndDelete({
+        _id: this.toObjectId(id),
+        projectId: this.toObjectId(projectId),
+      })
       .exec();
 
     this.realtimeGateway.emitToProject(
@@ -116,5 +141,9 @@ export class TasksService {
     );
 
     return task;
+  }
+
+  private toObjectId(id: string): Types.ObjectId {
+    return new Types.ObjectId(id);
   }
 }

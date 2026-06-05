@@ -9,7 +9,7 @@ import {
   WebSocketServer,
 } from '@nestjs/websockets';
 import { InjectModel } from '@nestjs/mongoose';
-import { Model } from 'mongoose';
+import { Model, Types } from 'mongoose';
 import { Server, Socket } from 'socket.io';
 import { RealtimeEvent } from '../common/enums/domain.enums';
 import { UserProject } from '../user-projects/user-projects.model';
@@ -61,7 +61,10 @@ export class RealtimeGateway implements OnGatewayConnection {
     }
 
     const membership = await this.userProjectModel
-      .findOne({ userId, projectId: body.projectId })
+      .findOne({
+        userId: this.toObjectId(userId),
+        projectId: this.toObjectId(body.projectId),
+      })
       .exec();
 
     if (!membership) {
@@ -79,5 +82,8 @@ export class RealtimeGateway implements OnGatewayConnection {
   private getProjectRoom(projectId: string) {
     return `project:${projectId}`;
   }
-}
 
+  private toObjectId(id: string): Types.ObjectId {
+    return new Types.ObjectId(id);
+  }
+}

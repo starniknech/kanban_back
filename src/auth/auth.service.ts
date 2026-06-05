@@ -99,7 +99,7 @@ export class AuthService {
     );
 
     await this.tokenModel.create({
-      userId: new Types.ObjectId(userId),
+      userId: this.toObjectId(userId),
       tokenHash: await bcrypt.hash(refreshToken, 10),
       type: TokenType.REFRESH,
       expiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
@@ -111,7 +111,7 @@ export class AuthService {
   private async requireActiveRefreshToken(userId: string, refreshToken: string) {
     const tokens = await this.tokenModel
       .find({
-        userId,
+        userId: this.toObjectId(userId),
         type: TokenType.REFRESH,
         revokedAt: null,
         expiresAt: { $gt: new Date() },
@@ -131,5 +131,9 @@ export class AuthService {
     const token = await this.requireActiveRefreshToken(userId, refreshToken);
     token.revokedAt = new Date();
     await token.save();
+  }
+
+  private toObjectId(id: string): Types.ObjectId {
+    return new Types.ObjectId(id);
   }
 }

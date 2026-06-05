@@ -2,7 +2,7 @@ import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
 import { Document, Types } from 'mongoose';
 import { TaskPriority, TaskStatus } from '../common/enums/domain.enums';
 
-@Schema({ timestamps: true })
+@Schema({ collection: 'tasks', timestamps: true })
 export class Task extends Document {
   @Prop({ type: Types.ObjectId, ref: 'Project', required: true, index: true })
   projectId: Types.ObjectId;

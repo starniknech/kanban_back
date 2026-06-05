@@ -1,7 +1,7 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { User } from './users.model';
-import { Model } from 'mongoose';
+import { Model, Types } from 'mongoose';
 import { FileService } from '../file/file.service';
 import { UploadedFile } from '../common/types/uploaded-file.type';
 
@@ -25,7 +25,10 @@ export class UsersService {
   }
 
   async findById(id: string) {
-    return this.userModel.findById(id).select('-passwordHash').exec();
+    return this.userModel
+      .findById(this.toObjectId(id))
+      .select('-passwordHash')
+      .exec();
   }
 
   async findByEmail(email: string) {
@@ -33,7 +36,8 @@ export class UsersService {
   }
 
   async update(id: string, data: Partial<User>, avatarFile?: UploadedFile) {
-    const user = await this.userModel.findById(id);
+    const userId = this.toObjectId(id);
+    const user = await this.userModel.findById(userId);
 
     if (!user) {
       throw new NotFoundException('User not found');
@@ -51,7 +55,7 @@ export class UsersService {
 
     const updatedUser = await this.userModel
       .findByIdAndUpdate(
-        id,
+        userId,
         {
           ...data,
           avatar: updatedAvatarPath,
@@ -64,6 +68,10 @@ export class UsersService {
   }
 
   async delete(id: string) {
-    return this.userModel.findByIdAndDelete(id).exec();
+    return this.userModel.findByIdAndDelete(this.toObjectId(id)).exec();
+  }
+
+  private toObjectId(id: string): Types.ObjectId {
+    return new Types.ObjectId(id);
   }
 }

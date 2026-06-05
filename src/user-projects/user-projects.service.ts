@@ -35,23 +35,28 @@ export class UserProjectsService {
     userId: string,
     projectId: string,
   ): Promise<UserProject | null> {
-    return this.userProjectModel.findOne({ userId, projectId }).exec();
+    return this.userProjectModel
+      .findOne({
+        userId: this.toObjectId(userId),
+        projectId: this.toObjectId(projectId),
+      })
+      .exec();
   }
 
   async listProjectMembers(projectId: string): Promise<UserProject[]> {
     return this.userProjectModel
-      .find({ projectId })
+      .find({ projectId: this.toObjectId(projectId) })
       .populate('userId', 'name email avatar')
       .exec();
   }
 
-  async listProjectIdsForUser(userId: string): Promise<string[]> {
+  async listProjectIdsForUser(userId: string): Promise<Types.ObjectId[]> {
     const memberships = await this.userProjectModel
-      .find({ userId })
+      .find({ userId: this.toObjectId(userId) })
       .select('projectId')
       .exec();
 
-    return memberships.map((membership) => membership.projectId.toString());
+    return memberships.map((membership) => membership.projectId);
   }
 
   async requireMember(userId: string, projectId: string): Promise<UserProject> {
@@ -94,7 +99,10 @@ export class UserProjectsService {
 
     const updated = await this.userProjectModel
       .findOneAndUpdate(
-        { userId: memberId, projectId },
+        {
+          userId: this.toObjectId(memberId),
+          projectId: this.toObjectId(projectId),
+        },
         { role: normalizedRoles },
         { new: true },
       )
@@ -119,7 +127,14 @@ export class UserProjectsService {
     }
 
     return this.userProjectModel
-      .findOneAndDelete({ userId: memberId, projectId })
+      .findOneAndDelete({
+        userId: this.toObjectId(memberId),
+        projectId: this.toObjectId(projectId),
+      })
       .exec();
+  }
+
+  private toObjectId(id: string): Types.ObjectId {
+    return new Types.ObjectId(id);
   }
 }
