@@ -1,21 +1,22 @@
+// one export for compilation
 export type EntityId = string;
 
-export enum TokenType {
+enum TokenType {
   REFRESH = 'refresh',
 }
 
-export enum ProjectRole {
+enum ProjectRole {
   OWNER = 'owner',
   ADMIN = 'admin',
   MEMBER = 'member',
 }
 
-export enum InvitationRole {
+enum InvitationRole {
   ADMIN = 'admin',
   MEMBER = 'member',
 }
 
-export enum InvitationStatus {
+enum InvitationStatus {
   PENDING = 'pending',
   ACCEPTED = 'accepted',
   DECLINED = 'declined',
@@ -23,29 +24,42 @@ export enum InvitationStatus {
   CANCELLED = 'cancelled',
 }
 
-export enum TaskStatus {
+enum NotificationStatus {
+  READ = 'read',
+  UNREAD = 'unread',
+}
+
+enum TaskStatus {
   TODO = 'todo',
   IN_PROGRESS = 'in_progress',
   REVIEW = 'review',
   DONE = 'done',
 }
 
-export enum TaskPriority {
+enum TaskPriority {
   LOW = 'low',
   MEDIUM = 'medium',
   HIGH = 'high',
   URGENT = 'urgent',
 }
 
-export enum RealtimeEvent {
+enum RealtimeEvent {
+  PROJECT_ONLINE_USERS = 'project.online_users',
+  PROJECT_UPDATED = 'project.updated',
+  PROJECT_RENAMED = 'project.renamed',
   TASK_CREATED = 'task.created',
   TASK_UPDATED = 'task.updated',
   TASK_DELETED = 'task.deleted',
   TASK_MOVED = 'task.moved',
+  INVITATION_CREATED = 'invitation.created',
+  INVITATION_ACCEPTED = 'invitation.accepted',
+  INVITATION_DECLINED = 'invitation.declined',
+  INVITATION_CANCELLED = 'invitation.cancelled',
   PARTICIPANT_ROLES_UPDATED = 'participant.roles_updated',
+  PARTICIPANT_REMOVED = 'participant.removed',
 }
 
-export interface Token {
+interface Token {
   id: EntityId;
   userId: EntityId;
   tokenHash: string;
@@ -58,7 +72,7 @@ export interface Token {
   user?: User;
 }
 
-export interface User {
+interface User {
   id: EntityId;
   name: string;
   email: string;
@@ -73,7 +87,7 @@ export interface User {
   receivedInvitations?: Invitation[];
 }
 
-export interface Project {
+interface Project {
   id: EntityId;
   name: string;
   description?: string | null;
@@ -89,7 +103,7 @@ export interface Project {
   invitations?: Invitation[];
 }
 
-export interface Task {
+interface Task {
   id: EntityId;
   projectId: EntityId;
   title: string;
@@ -98,7 +112,7 @@ export interface Task {
   priority: TaskPriority;
   position: number;
   createdByUserId: EntityId;
-  assignedToUserId?: EntityId | null;
+  assignees: EntityId[];
   dueDate?: Date | null;
   completedAt?: Date | null;
   createdAt: Date;
@@ -106,10 +120,10 @@ export interface Task {
 
   project?: Project;
   createdBy?: User;
-  assignedTo?: User;
+  assigneeMemberships?: UserProject[];
 }
 
-export interface UserProject {
+interface UserProject {
   id: EntityId;
   userId: EntityId;
   projectId: EntityId;
@@ -122,7 +136,7 @@ export interface UserProject {
   project?: Project;
 }
 
-export interface Invitation {
+interface Invitation {
   id: EntityId;
   projectId: EntityId;
   invitedByUserId: EntityId;
@@ -130,6 +144,7 @@ export interface Invitation {
   email: string;
   role: InvitationRole;
   status: InvitationStatus;
+  notificationStatus: NotificationStatus;
   expiresAt: Date;
   acceptedAt?: Date | null;
   declinedAt?: Date | null;

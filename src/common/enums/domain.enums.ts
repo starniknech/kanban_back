@@ -21,6 +21,11 @@ export enum InvitationStatus {
   CANCELLED = 'cancelled',
 }
 
+export enum NotificationStatus {
+  READ = 'read',
+  UNREAD = 'unread',
+}
+
 export enum TaskStatus {
   TODO = 'todo',
   IN_PROGRESS = 'in_progress',
@@ -36,10 +41,17 @@ export enum TaskPriority {
 }
 
 export enum RealtimeEvent {
+  PROJECT_ONLINE_USERS = 'project.online_users',
+  PROJECT_UPDATED = 'project.updated',
+  PROJECT_RENAMED = 'project.renamed',
   TASK_CREATED = 'task.created',
   TASK_UPDATED = 'task.updated',
   TASK_DELETED = 'task.deleted',
   TASK_MOVED = 'task.moved',
+  INVITATION_CREATED = 'invitation.created',
+  INVITATION_ACCEPTED = 'invitation.accepted',
+  INVITATION_DECLINED = 'invitation.declined',
+  INVITATION_CANCELLED = 'invitation.cancelled',
   PARTICIPANT_ROLES_UPDATED = 'participant.roles_updated',
+  PARTICIPANT_REMOVED = 'participant.removed',
 }
-

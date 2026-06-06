@@ -1,15 +1,19 @@
 import { Injectable } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Task } from './tasks.model';
-import { Model, Types } from 'mongoose';
-import { ProjectRole, RealtimeEvent, TaskStatus } from '../common/enums/domain.enums';
-import { RealtimeGateway } from '../realtime/realtime.gateway';
+import { Model } from 'mongoose';
+import { ProjectRole, TaskStatus } from '../common/enums/domain.enums';
+import { toObjectId, toObjectIds } from '../common/utils/object-id';
+import { RealtimeTasksGateway } from '../realtime/tasks.gateway';
 import { UserProjectsService } from '../user-projects/user-projects.service';
 
-type TaskInput = Partial<
-  Omit<Task, 'projectId' | 'createdByUserId' | 'assignedToUserId' | 'dueDate'>
-> & {
-  assignedToUserId?: string;
+type TaskInput = {
+  title?: string;
+  description?: string;
+  status?: TaskStatus;
+  priority?: Task['priority'];
+  position?: number;
+  assignees?: string[];
   dueDate?: string | Date;
 };
 
@@ -18,7 +22,7 @@ export class TasksService {
   constructor(
     @InjectModel(Task.name) private readonly taskModel: Model<Task>,
     private readonly userProjectsService: UserProjectsService,
-    private readonly realtimeGateway: RealtimeGateway,
+    private readonly realtimeTasksGateway: RealtimeTasksGateway,
   ) {}
 
   async create(userId: string, projectId: string, data: TaskInput) {
@@ -26,19 +30,15 @@ export class TasksService {
 
     const task = await this.taskModel.create({
       ...data,
-      projectId: new Types.ObjectId(projectId),
-      createdByUserId: new Types.ObjectId(userId),
-      assignedToUserId: data.assignedToUserId
-        ? new Types.ObjectId(data.assignedToUserId)
-        : null,
+      projectId: toObjectId(projectId),
+      createdByUserId: toObjectId(userId),
+      assignees: toObjectIds(data.assignees),
       dueDate: data.dueDate ? new Date(data.dueDate) : null,
     });
 
-    this.realtimeGateway.emitToProject(
-      projectId,
-      RealtimeEvent.TASK_CREATED,
-      task,
-    );
+    await this.populateAssignees(task);
+
+    this.realtimeTasksGateway.emitCreated(projectId, task);
 
     return task;
   }
@@ -46,8 +46,9 @@ export class TasksService {
   async findAll(userId: string, projectId: string) {
     await this.userProjectsService.requireMember(userId, projectId);
     return this.taskModel
-      .find({ projectId: this.toObjectId(projectId) })
+      .find({ projectId: toObjectId(projectId) })
       .sort({ position: 1 })
+      .populate(this.assigneePopulateOptions())
       .exec();
   }
 
@@ -55,71 +56,54 @@ export class TasksService {
     await this.userProjectsService.requireMember(userId, projectId);
     return this.taskModel
       .findOne({
-        _id: this.toObjectId(id),
-        projectId: this.toObjectId(projectId),
+        _id: toObjectId(id),
+        projectId: toObjectId(projectId),
       })
+      .populate(this.assigneePopulateOptions())
       .exec();
   }
 
-  async update(
-    userId: string,
-    projectId: string,
-    id: string,
-    data: TaskInput,
-  ) {
+  async update(userId: string, projectId: string, id: string, data: TaskInput) {
     await this.userProjectsService.requireMember(userId, projectId);
     const updateData = {
       ...data,
-      assignedToUserId: data.assignedToUserId
-        ? new Types.ObjectId(data.assignedToUserId)
-        : undefined,
+      assignees: data.assignees ? toObjectIds(data.assignees) : undefined,
       dueDate: data.dueDate ? new Date(data.dueDate) : undefined,
     };
 
     const task = await this.taskModel
       .findOneAndUpdate(
         {
-          _id: this.toObjectId(id),
-          projectId: this.toObjectId(projectId),
+          _id: toObjectId(id),
+          projectId: toObjectId(projectId),
         },
         updateData,
         { new: true },
       )
+      .populate(this.assigneePopulateOptions())
       .exec();
 
-    this.realtimeGateway.emitToProject(
-      projectId,
-      RealtimeEvent.TASK_UPDATED,
-      task,
-    );
+    this.realtimeTasksGateway.emitUpdated(projectId, task);
 
     return task;
   }
 
-  async move(
-    userId: string,
-    projectId: string,
-    id: string,
-    data: { status?: TaskStatus; position?: number },
-  ) {
+  async move(userId: string, projectId: string, id: string, data: { status?: TaskStatus; position?: number }) {
     await this.userProjectsService.requireMember(userId, projectId);
 
     const task = await this.taskModel
       .findOneAndUpdate(
         {
-          _id: this.toObjectId(id),
-          projectId: this.toObjectId(projectId),
+          _id: toObjectId(id),
+          projectId: toObjectId(projectId),
         },
         data,
         { new: true },
       )
+      .populate(this.assigneePopulateOptions())
       .exec();
 
-    this.realtimeGateway.emitToProject(
-      projectId,
-      RealtimeEvent.TASK_MOVED,
-      task,
-    );
+    this.realtimeTasksGateway.emitMoved(projectId, task);
 
     return task;
   }
@@ -129,21 +113,28 @@ export class TasksService {
 
     const task = await this.taskModel
       .findOneAndDelete({
-        _id: this.toObjectId(id),
-        projectId: this.toObjectId(projectId),
+        _id: toObjectId(id),
+        projectId: toObjectId(projectId),
       })
+      .populate(this.assigneePopulateOptions())
       .exec();
 
-    this.realtimeGateway.emitToProject(
-      projectId,
-      RealtimeEvent.TASK_DELETED,
-      task,
-    );
+    this.realtimeTasksGateway.emitDeleted(projectId, task);
 
     return task;
   }
 
-  private toObjectId(id: string): Types.ObjectId {
-    return new Types.ObjectId(id);
+  private assigneePopulateOptions() {
+    return {
+      path: 'assignees',
+      populate: {
+        path: 'userId',
+        select: 'name email avatar',
+      },
+    };
+  }
+
+  private populateAssignees(task: Task) {
+    return task.populate(this.assigneePopulateOptions());
   }
 }

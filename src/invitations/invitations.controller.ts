@@ -11,6 +11,7 @@ import { AuthUser } from '../common/auth/auth-user';
 import { CurrentUser } from '../common/auth/current-user.decorator';
 import { JwtAuthGuard } from '../common/auth/jwt-auth.guard';
 import { CreateInvitationDto } from './dto/create-invitation.dto';
+import { UpdateInvitationNotificationStatusDto } from './dto/update-invitation-notification-status.dto';
 import { InvitationsService } from './invitations.service';
 
 @Controller()
@@ -38,6 +39,19 @@ export class InvitationsController {
   @Get('invitations/my')
   listMyInvitations(@CurrentUser() user: AuthUser) {
     return this.invitationsService.listMyInvitations(user.id, user.email);
+  }
+
+  @Patch('invitations/:invitationId/notification-status')
+  updateNotificationStatus(
+    @CurrentUser() user: AuthUser,
+    @Param('invitationId') invitationId: string,
+    @Body() body: UpdateInvitationNotificationStatusDto,
+  ) {
+    return this.invitationsService.updateNotificationStatus(
+      user.id,
+      invitationId,
+      body.notificationStatus,
+    );
   }
 
   @Patch('invitations/:invitationId/accept')
