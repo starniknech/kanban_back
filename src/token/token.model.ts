@@ -1,6 +1,6 @@
 import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
 import { Document, Types } from 'mongoose';
-import { TokenType } from './common/enums/domain.enums';
+import { TokenType } from '../common/enums/domain.enums';
 
 @Schema({ timestamps: true })
 export class Token extends Document {
@@ -21,4 +21,3 @@ export class Token extends Document {
 }
 
 export const TokenSchema = SchemaFactory.createForClass(Token);
-

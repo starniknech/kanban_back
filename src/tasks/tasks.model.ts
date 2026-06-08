@@ -1,8 +1,9 @@
 import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
 import { Document, Types } from 'mongoose';
 import { TaskPriority, TaskStatus } from '../common/enums/domain.enums';
+import { UserProject } from '../user-projects/user-projects.model';
 
-@Schema({ timestamps: true })
+@Schema({ collection: 'tasks', timestamps: true })
 export class Task extends Document {
   @Prop({ type: Types.ObjectId, ref: 'Project', required: true, index: true })
   projectId: Types.ObjectId;
@@ -25,8 +26,11 @@ export class Task extends Document {
   @Prop({ type: Types.ObjectId, ref: 'User', required: true })
   createdByUserId: Types.ObjectId;
 
-  @Prop({ type: Types.ObjectId, ref: 'User', default: null })
-  assignedToUserId?: Types.ObjectId | null;
+  @Prop({
+    type: [{ type: Types.ObjectId, ref: UserProject.name }],
+    default: [],
+  })
+  assignees: Types.ObjectId[];
 
   @Prop({ type: Date, default: null })
   dueDate?: Date | null;

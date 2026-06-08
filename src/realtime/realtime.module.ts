@@ -1,21 +1,22 @@
-import { Module } from '@nestjs/common';
+import { Module, forwardRef } from '@nestjs/common';
 import { JwtModule } from '@nestjs/jwt';
-import { MongooseModule } from '@nestjs/mongoose';
-import {
-  UserProject,
-  UserProjectSchema,
-} from '../user-projects/user-projects.model';
+import { InvitationsModule } from '../invitations/invitations.module';
+import { ProjectsModule } from '../projects/projects.module';
+import { TasksModule } from '../tasks/tasks.module';
+import { UserProjectsModule } from '../user-projects/user-projects.module';
+import { RealtimeInvitationsGateway } from './invitations.gateway';
 import { RealtimeGateway } from './realtime.gateway';
+import { RealtimeTasksGateway } from './tasks.gateway';
 
 @Module({
   imports: [
     JwtModule.register({}),
-    MongooseModule.forFeature([
-      { name: UserProject.name, schema: UserProjectSchema },
-    ]),
+    UserProjectsModule,
+    forwardRef(() => ProjectsModule),
+    forwardRef(() => TasksModule),
+    forwardRef(() => InvitationsModule),
   ],
-  providers: [RealtimeGateway],
-  exports: [RealtimeGateway],
+  providers: [RealtimeGateway, RealtimeTasksGateway, RealtimeInvitationsGateway],
+  exports: [RealtimeGateway, RealtimeTasksGateway, RealtimeInvitationsGateway],
 })
 export class RealtimeModule {}
-

@@ -3,7 +3,7 @@ import { Document, Types } from 'mongoose';
 import { MEMBER_ROLES } from '../common/auth/role-utils';
 import { ProjectRole } from '../common/enums/domain.enums';
 
-@Schema({ timestamps: true })
+@Schema({ collection: 'user-projects', timestamps: true })
 export class UserProject extends Document {
   @Prop({ type: Types.ObjectId, ref: 'User', required: true, index: true })
   userId: Types.ObjectId;
@@ -20,4 +20,3 @@ export class UserProject extends Document {
 
 export const UserProjectSchema = SchemaFactory.createForClass(UserProject);
 UserProjectSchema.index({ userId: 1, projectId: 1 }, { unique: true });
-

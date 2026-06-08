@@ -1,15 +1,9 @@
-import {
-  ForbiddenException,
-  Injectable,
-  NotFoundException,
-} from '@nestjs/common';
+import { ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model, Types } from 'mongoose';
-import {
-  hasProjectRole,
-  normalizeProjectRoles,
-} from '../common/auth/role-utils';
+import { hasProjectRole, normalizeProjectRoles } from '../common/auth/role-utils';
 import { ProjectRole } from '../common/enums/domain.enums';
+import { toObjectId } from '../common/utils/object-id';
 import { UserProject } from './user-projects.model';
 
 @Injectable()
@@ -19,39 +13,37 @@ export class UserProjectsService {
     private readonly userProjectModel: Model<UserProject>,
   ) {}
 
-  async createMembership(
-    userId: string,
-    projectId: string,
-    role: ProjectRole[],
-  ): Promise<UserProject> {
+  async createMembership(userId: string, projectId: string, role: ProjectRole[]): Promise<UserProject> {
     return this.userProjectModel.create({
-      userId: new Types.ObjectId(userId),
-      projectId: new Types.ObjectId(projectId),
+      userId: toObjectId(userId),
+      projectId: toObjectId(projectId),
       role: normalizeProjectRoles(role),
     });
   }
 
-  async findMembership(
-    userId: string,
-    projectId: string,
-  ): Promise<UserProject | null> {
-    return this.userProjectModel.findOne({ userId, projectId }).exec();
+  async findMembership(userId: string, projectId: string): Promise<UserProject | null> {
+    return this.userProjectModel
+      .findOne({
+        userId: toObjectId(userId),
+        projectId: toObjectId(projectId),
+      })
+      .exec();
   }
 
   async listProjectMembers(projectId: string): Promise<UserProject[]> {
     return this.userProjectModel
-      .find({ projectId })
+      .find({ projectId: toObjectId(projectId) })
       .populate('userId', 'name email avatar')
       .exec();
   }
 
-  async listProjectIdsForUser(userId: string): Promise<string[]> {
+  async listProjectIdsForUser(userId: string): Promise<Types.ObjectId[]> {
     const memberships = await this.userProjectModel
-      .find({ userId })
+      .find({ userId: toObjectId(userId) })
       .select('projectId')
       .exec();
 
-    return memberships.map((membership) => membership.projectId.toString());
+    return memberships.map((membership) => membership.projectId);
   }
 
   async requireMember(userId: string, projectId: string): Promise<UserProject> {
@@ -64,11 +56,7 @@ export class UserProjectsService {
     return membership;
   }
 
-  async requireRole(
-    userId: string,
-    projectId: string,
-    role: ProjectRole,
-  ): Promise<UserProject> {
+  async requireRole(userId: string, projectId: string, role: ProjectRole): Promise<UserProject> {
     const membership = await this.requireMember(userId, projectId);
 
     if (!hasProjectRole(membership.role, role)) {
@@ -78,12 +66,7 @@ export class UserProjectsService {
     return membership;
   }
 
-  async updateRoles(
-    ownerId: string,
-    projectId: string,
-    memberId: string,
-    role: ProjectRole[],
-  ): Promise<UserProject> {
+  async updateRoles(ownerId: string, projectId: string, memberId: string, role: ProjectRole[]): Promise<UserProject> {
     await this.requireRole(ownerId, projectId, ProjectRole.OWNER);
 
     const normalizedRoles = normalizeProjectRoles(role);
@@ -94,7 +77,10 @@ export class UserProjectsService {
 
     const updated = await this.userProjectModel
       .findOneAndUpdate(
-        { userId: memberId, projectId },
+        {
+          userId: toObjectId(memberId),
+          projectId: toObjectId(projectId),
+        },
         { role: normalizedRoles },
         { new: true },
       )
@@ -107,11 +93,7 @@ export class UserProjectsService {
     return updated;
   }
 
-  async removeMember(
-    ownerId: string,
-    projectId: string,
-    memberId: string,
-  ): Promise<UserProject | null> {
+  async removeMember(ownerId: string, projectId: string, memberId: string): Promise<UserProject | null> {
     await this.requireRole(ownerId, projectId, ProjectRole.OWNER);
 
     if (ownerId === memberId) {
@@ -119,7 +101,10 @@ export class UserProjectsService {
     }
 
     return this.userProjectModel
-      .findOneAndDelete({ userId: memberId, projectId })
+      .findOneAndDelete({
+        userId: toObjectId(memberId),
+        projectId: toObjectId(projectId),
+      })
       .exec();
   }
 }

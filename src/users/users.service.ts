@@ -4,6 +4,7 @@ import { User } from './users.model';
 import { Model } from 'mongoose';
 import { FileService } from '../file/file.service';
 import { UploadedFile } from '../common/types/uploaded-file.type';
+import { toObjectId } from '../common/utils/object-id';
 
 @Injectable()
 export class UsersService {
@@ -25,7 +26,7 @@ export class UsersService {
   }
 
   async findById(id: string) {
-    return this.userModel.findById(id).select('-passwordHash').exec();
+    return this.userModel.findById(toObjectId(id)).select('-passwordHash').exec();
   }
 
   async findByEmail(email: string) {
@@ -33,7 +34,8 @@ export class UsersService {
   }
 
   async update(id: string, data: Partial<User>, avatarFile?: UploadedFile) {
-    const user = await this.userModel.findById(id);
+    const userId = toObjectId(id);
+    const user = await this.userModel.findById(userId);
 
     if (!user) {
       throw new NotFoundException('User not found');
@@ -51,7 +53,7 @@ export class UsersService {
 
     const updatedUser = await this.userModel
       .findByIdAndUpdate(
-        id,
+        userId,
         {
           ...data,
           avatar: updatedAvatarPath,
@@ -64,6 +66,6 @@ export class UsersService {
   }
 
   async delete(id: string) {
-    return this.userModel.findByIdAndDelete(id).exec();
+    return this.userModel.findByIdAndDelete(toObjectId(id)).exec();
   }
 }

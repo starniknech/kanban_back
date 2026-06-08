@@ -1,9 +1,6 @@
 import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
 import { Document, Types } from 'mongoose';
-import {
-  InvitationRole,
-  InvitationStatus,
-} from '../common/enums/domain.enums';
+import { InvitationRole, InvitationStatus, NotificationStatus } from '../common/enums/domain.enums';
 
 @Schema({ timestamps: true })
 export class Invitation extends Document {
@@ -24,6 +21,9 @@ export class Invitation extends Document {
 
   @Prop({ enum: InvitationStatus, default: InvitationStatus.PENDING })
   status: InvitationStatus;
+
+  @Prop({ enum: NotificationStatus, default: NotificationStatus.UNREAD })
+  notificationStatus: NotificationStatus;
 
   @Prop({ required: true })
   expiresAt: Date;

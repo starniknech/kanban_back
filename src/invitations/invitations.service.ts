@@ -1,19 +1,10 @@
-import {
-  ForbiddenException,
-  Injectable,
-  NotFoundException,
-} from '@nestjs/common';
+import { ForbiddenException, Inject, Injectable, NotFoundException, forwardRef } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
-import { Model, Types } from 'mongoose';
-import {
-  ADMIN_ROLES,
-  MEMBER_ROLES,
-} from '../common/auth/role-utils';
-import {
-  InvitationRole,
-  InvitationStatus,
-  ProjectRole,
-} from '../common/enums/domain.enums';
+import { Model } from 'mongoose';
+import { ADMIN_ROLES, MEMBER_ROLES } from '../common/auth/role-utils';
+import { InvitationRole, InvitationStatus, NotificationStatus, ProjectRole } from '../common/enums/domain.enums';
+import { toObjectId } from '../common/utils/object-id';
+import { RealtimeInvitationsGateway } from '../realtime/invitations.gateway';
 import { UserProjectsService } from '../user-projects/user-projects.service';
 import { UsersService } from '../users/users.service';
 import { Invitation } from './invitations.model';
@@ -25,52 +16,109 @@ export class InvitationsService {
     private readonly invitationModel: Model<Invitation>,
     private readonly userProjectsService: UserProjectsService,
     private readonly usersService: UsersService,
+    @Inject(forwardRef(() => RealtimeInvitationsGateway))
+    private readonly realtimeInvitationsGateway: RealtimeInvitationsGateway,
   ) {}
 
-  async create(
-    userId: string,
-    projectId: string,
-    data: { email: string; role: InvitationRole },
-  ) {
-    const membership = await this.userProjectsService.requireRole(
-      userId,
-      projectId,
-      ProjectRole.ADMIN,
-    );
+  async create(userId: string, projectId: string, data: { email: string; role: InvitationRole }) {
+    const membership = await this.userProjectsService.requireRole(userId, projectId, ProjectRole.ADMIN);
 
-    if (
-      data.role === InvitationRole.ADMIN &&
-      !membership.role.includes(ProjectRole.OWNER)
-    ) {
+    if (data.role === InvitationRole.ADMIN && !membership.role.includes(ProjectRole.OWNER)) {
       throw new ForbiddenException('Only owner can invite admins');
     }
 
     const invitedUser = await this.usersService.findByEmail(data.email);
     const invitation = await this.invitationModel.create({
-      projectId: new Types.ObjectId(projectId),
-      invitedByUserId: new Types.ObjectId(userId),
+      projectId: toObjectId(projectId),
+      invitedByUserId: toObjectId(userId),
       invitedUserId: invitedUser?._id ?? null,
       email: data.email.toLowerCase(),
       role: data.role,
       status: InvitationStatus.PENDING,
+      notificationStatus: NotificationStatus.UNREAD,
       expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
     });
+
+    this.realtimeInvitationsGateway.emitCreated(projectId, invitation);
 
     return invitation;
   }
 
   async listProjectInvitations(userId: string, projectId: string) {
     await this.userProjectsService.requireRole(userId, projectId, ProjectRole.ADMIN);
-    return this.invitationModel.find({ projectId }).exec();
+    return this.invitationModel.find({ projectId: toObjectId(projectId) }).exec();
+  }
+
+  async update(
+    userId: string,
+    projectId: string,
+    invitationId: string,
+    data: { email?: string; role?: InvitationRole },
+  ) {
+    const membership = await this.userProjectsService.requireRole(userId, projectId, ProjectRole.ADMIN);
+
+    if (data.role === InvitationRole.ADMIN && !membership.role.includes(ProjectRole.OWNER)) {
+      throw new ForbiddenException('Only owner can invite admins');
+    }
+
+    const invitation = await this.invitationModel
+      .findOne({
+        _id: toObjectId(invitationId),
+        projectId: toObjectId(projectId),
+        status: InvitationStatus.PENDING,
+      })
+      .exec();
+
+    if (!invitation) {
+      throw new NotFoundException('Pending invitation not found');
+    }
+
+    if (data.email !== undefined) {
+      const invitedUser = await this.usersService.findByEmail(data.email);
+      invitation.email = data.email.toLowerCase();
+      invitation.invitedUserId = invitedUser ? toObjectId(invitedUser.id) : null;
+    }
+
+    if (data.role !== undefined) {
+      invitation.role = data.role;
+    }
+
+    const updated = await invitation.save();
+    this.realtimeInvitationsGateway.emitUpdated(projectId, updated);
+
+    return updated;
   }
 
   async listMyInvitations(userId: string, email: string) {
     return this.invitationModel
       .find({
-        $or: [{ invitedUserId: userId }, { email: email.toLowerCase() }],
+        $or: [{ invitedUserId: toObjectId(userId) }, { email: email.toLowerCase() }],
         status: InvitationStatus.PENDING,
       })
       .exec();
+  }
+
+  async updateNotificationStatus(userId: string, invitationId: string, notificationStatus: NotificationStatus) {
+    const invitation = await this.invitationModel.findById(toObjectId(invitationId)).exec();
+
+    if (!invitation) {
+      throw new NotFoundException('Invitation not found');
+    }
+
+    const user = await this.usersService.findById(userId);
+    const isInvitedUser = invitation.invitedUserId?.toString() === userId;
+    const isInvitedEmail = user ? invitation.email === user.email.toLowerCase() : false;
+
+    if (!isInvitedUser && !isInvitedEmail) {
+      throw new ForbiddenException('This invitation belongs to another user');
+    }
+
+    invitation.notificationStatus = notificationStatus;
+    const updated = await invitation.save();
+
+    this.realtimeInvitationsGateway.emitUpdated(invitation.projectId.toString(), updated);
+
+    return updated;
   }
 
   async accept(userId: string, invitationId: string) {
@@ -81,18 +129,15 @@ export class InvitationsService {
       throw new ForbiddenException('This invitation belongs to another user');
     }
 
-    const role =
-      invitation.role === InvitationRole.ADMIN ? ADMIN_ROLES : MEMBER_ROLES;
+    const role = invitation.role === InvitationRole.ADMIN ? ADMIN_ROLES : MEMBER_ROLES;
 
-    await this.userProjectsService.createMembership(
-      userId,
-      invitation.projectId.toString(),
-      role,
-    );
+    await this.userProjectsService.createMembership(userId, invitation.projectId.toString(), role);
 
     invitation.status = InvitationStatus.ACCEPTED;
     invitation.acceptedAt = new Date();
     await invitation.save();
+
+    this.realtimeInvitationsGateway.emitAccepted(invitation.projectId.toString(), invitation);
 
     return invitation;
   }
@@ -107,14 +152,21 @@ export class InvitationsService {
 
     invitation.status = InvitationStatus.DECLINED;
     invitation.declinedAt = new Date();
-    return invitation.save();
+    const updated = await invitation.save();
+
+    this.realtimeInvitationsGateway.emitDeclined(invitation.projectId.toString(), updated);
+
+    return updated;
   }
 
   async cancel(userId: string, projectId: string, invitationId: string) {
     await this.userProjectsService.requireRole(userId, projectId, ProjectRole.ADMIN);
 
     const invitation = await this.invitationModel
-      .findOne({ _id: invitationId, projectId })
+      .findOne({
+        _id: toObjectId(invitationId),
+        projectId: toObjectId(projectId),
+      })
       .exec();
 
     if (!invitation) {
@@ -123,11 +175,15 @@ export class InvitationsService {
 
     invitation.status = InvitationStatus.CANCELLED;
     invitation.cancelledAt = new Date();
-    return invitation.save();
+    const updated = await invitation.save();
+
+    this.realtimeInvitationsGateway.emitCancelled(projectId, updated);
+
+    return updated;
   }
 
   private async getPendingInvitation(invitationId: string): Promise<Invitation> {
-    const invitation = await this.invitationModel.findById(invitationId).exec();
+    const invitation = await this.invitationModel.findById(toObjectId(invitationId)).exec();
 
     if (!invitation || invitation.status !== InvitationStatus.PENDING) {
       throw new NotFoundException('Pending invitation not found');

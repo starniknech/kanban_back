@@ -1,6 +1,7 @@
 import {
   IsDateString,
   IsEnum,
+  IsArray,
   IsMongoId,
   IsNumber,
   IsOptional,
@@ -33,11 +34,11 @@ export class CreateTaskDto {
   position?: number;
 
   @IsOptional()
-  @IsMongoId()
-  assignedToUserId?: string;
+  @IsArray()
+  @IsMongoId({ each: true })
+  assignees?: string[];
 
   @IsOptional()
   @IsDateString()
   dueDate?: string;
 }
-

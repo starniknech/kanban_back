@@ -1,4 +1,4 @@
-import { Module } from '@nestjs/common';
+import { Module, forwardRef } from '@nestjs/common';
 import { JwtModule } from '@nestjs/jwt';
 import { MongooseModule } from '@nestjs/mongoose';
 import { RealtimeModule } from '../realtime/realtime.module';
@@ -12,11 +12,10 @@ import { ProjectsService } from './projects.service';
     JwtModule.register({}),
     MongooseModule.forFeature([{ name: Project.name, schema: ProjectSchema }]),
     UserProjectsModule,
-    RealtimeModule,
+    forwardRef(() => RealtimeModule),
   ],
   controllers: [ProjectsController],
   providers: [ProjectsService],
   exports: [ProjectsService],
 })
 export class ProjectsModule {}
-
