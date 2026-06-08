@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Inject, Injectable, NotFoundException, forwardRef } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
 import { OWNER_ROLES } from '../common/auth/role-utils';
@@ -13,6 +13,7 @@ export class ProjectsService {
   constructor(
     @InjectModel(Project.name) private readonly projectModel: Model<Project>,
     private readonly userProjectsService: UserProjectsService,
+    @Inject(forwardRef(() => RealtimeGateway))
     private readonly realtimeGateway: RealtimeGateway,
   ) {}
 
@@ -68,7 +69,13 @@ export class ProjectsService {
   async delete(userId: string, projectId: string) {
     await this.userProjectsService.requireRole(userId, projectId, ProjectRole.OWNER);
 
-    return this.projectModel.findByIdAndUpdate(toObjectId(projectId), { deletedAt: new Date() }, { new: true }).exec();
+    const project = await this.projectModel
+      .findByIdAndUpdate(toObjectId(projectId), { deletedAt: new Date() }, { new: true })
+      .exec();
+
+    this.realtimeGateway.emitProjectDeleted(projectId, project);
+
+    return project;
   }
 
   async listMembers(userId: string, projectId: string) {

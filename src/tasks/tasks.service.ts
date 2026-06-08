@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Inject, Injectable, forwardRef } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Task } from './tasks.model';
 import { Model } from 'mongoose';
@@ -22,6 +22,7 @@ export class TasksService {
   constructor(
     @InjectModel(Task.name) private readonly taskModel: Model<Task>,
     private readonly userProjectsService: UserProjectsService,
+    @Inject(forwardRef(() => RealtimeTasksGateway))
     private readonly realtimeTasksGateway: RealtimeTasksGateway,
   ) {}
 

@@ -1,4 +1,4 @@
-import { ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
+import { ForbiddenException, Inject, Injectable, NotFoundException, forwardRef } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
 import { ADMIN_ROLES, MEMBER_ROLES } from '../common/auth/role-utils';
@@ -16,6 +16,7 @@ export class InvitationsService {
     private readonly invitationModel: Model<Invitation>,
     private readonly userProjectsService: UserProjectsService,
     private readonly usersService: UsersService,
+    @Inject(forwardRef(() => RealtimeInvitationsGateway))
     private readonly realtimeInvitationsGateway: RealtimeInvitationsGateway,
   ) {}
 
@@ -48,6 +49,46 @@ export class InvitationsService {
     return this.invitationModel.find({ projectId: toObjectId(projectId) }).exec();
   }
 
+  async update(
+    userId: string,
+    projectId: string,
+    invitationId: string,
+    data: { email?: string; role?: InvitationRole },
+  ) {
+    const membership = await this.userProjectsService.requireRole(userId, projectId, ProjectRole.ADMIN);
+
+    if (data.role === InvitationRole.ADMIN && !membership.role.includes(ProjectRole.OWNER)) {
+      throw new ForbiddenException('Only owner can invite admins');
+    }
+
+    const invitation = await this.invitationModel
+      .findOne({
+        _id: toObjectId(invitationId),
+        projectId: toObjectId(projectId),
+        status: InvitationStatus.PENDING,
+      })
+      .exec();
+
+    if (!invitation) {
+      throw new NotFoundException('Pending invitation not found');
+    }
+
+    if (data.email !== undefined) {
+      const invitedUser = await this.usersService.findByEmail(data.email);
+      invitation.email = data.email.toLowerCase();
+      invitation.invitedUserId = invitedUser ? toObjectId(invitedUser.id) : null;
+    }
+
+    if (data.role !== undefined) {
+      invitation.role = data.role;
+    }
+
+    const updated = await invitation.save();
+    this.realtimeInvitationsGateway.emitUpdated(projectId, updated);
+
+    return updated;
+  }
+
   async listMyInvitations(userId: string, email: string) {
     return this.invitationModel
       .find({
@@ -57,11 +98,7 @@ export class InvitationsService {
       .exec();
   }
 
-  async updateNotificationStatus(
-    userId: string,
-    invitationId: string,
-    notificationStatus: NotificationStatus,
-  ) {
+  async updateNotificationStatus(userId: string, invitationId: string, notificationStatus: NotificationStatus) {
     const invitation = await this.invitationModel.findById(toObjectId(invitationId)).exec();
 
     if (!invitation) {
@@ -77,7 +114,11 @@ export class InvitationsService {
     }
 
     invitation.notificationStatus = notificationStatus;
-    return invitation.save();
+    const updated = await invitation.save();
+
+    this.realtimeInvitationsGateway.emitUpdated(invitation.projectId.toString(), updated);
+
+    return updated;
   }
 
   async accept(userId: string, invitationId: string) {

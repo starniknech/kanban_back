@@ -672,6 +672,46 @@ If the token is missing or invalid, the server disconnects the socket.
 
 ### Client-To-Server Events
 
+#### `dashboard.join`
+
+Direction: frontend -> backend
+
+Joins the authenticated socket to dashboard rooms for the current user id and email. Use this on the dashboard page to receive invitation notifications that are not tied to an opened project page.
+
+Payload: none.
+
+Example:
+
+```ts
+socket.emit('dashboard.join', (ack: { invitations: Invitation[] }) => {
+  setInvitations(ack.invitations);
+});
+```
+
+Acknowledgement:
+
+```ts
+{
+  invitations: Invitation[];
+}
+```
+
+#### `dashboard.leave`
+
+Direction: frontend -> backend
+
+Leaves the authenticated user's dashboard rooms.
+
+Payload: none.
+
+Acknowledgement:
+
+```ts
+{
+  ok: true;
+}
+```
+
 #### `project.join`
 
 Direction: frontend -> backend
@@ -737,7 +777,21 @@ Acknowledgement:
 
 ### Server-To-Client Events
 
-Server events are emitted only to sockets that have joined the affected project room with `project.join`.
+Project-scoped events are emitted to sockets that have joined the affected project room with `project.join`. Invitation events are also emitted to the invited user's dashboard rooms after `dashboard.join`.
+
+#### `dashboard.invitations`
+
+Direction: backend -> frontend
+
+Emitted immediately after `dashboard.join` with the current pending invitations for the authenticated user.
+
+Payload:
+
+```ts
+{
+  invitations: Invitation[];
+}
+```
 
 #### `project.online_users`
 
@@ -776,6 +830,14 @@ Direction: backend -> frontend
 Emitted after `PATCH /projects/:projectId` when the update payload includes `name`.
 
 Payload: updated `Project`.
+
+#### `project.deleted`
+
+Direction: backend -> frontend
+
+Emitted after `DELETE /projects/:projectId` or `project.delete`.
+
+Payload: deleted `Project | null`.
 
 #### `task.created`
 
@@ -879,9 +941,21 @@ The removed user's sockets receive this event before the backend removes them fr
 
 Direction: backend -> frontend
 
-Emitted after `POST /projects/:projectId/invitations`.
+Emitted after `POST /projects/:projectId/invitations` or `invitation.create`.
 
 Payload: created `Invitation`.
+
+Rooms: project room and invited user's dashboard rooms.
+
+#### `invitation.updated`
+
+Direction: backend -> frontend
+
+Emitted after `invitation.update` or `invitation.update_notification_status`.
+
+Payload: updated `Invitation`.
+
+Rooms: project room and invited user's dashboard rooms.
 
 #### `invitation.accepted`
 
@@ -891,6 +965,8 @@ Emitted after `PATCH /invitations/:invitationId/accept`.
 
 Payload: accepted `Invitation`.
 
+Rooms: project room and invited user's dashboard rooms.
+
 #### `invitation.declined`
 
 Direction: backend -> frontend
@@ -899,6 +975,8 @@ Emitted after `PATCH /invitations/:invitationId/decline`.
 
 Payload: declined `Invitation`.
 
+Rooms: project room and invited user's dashboard rooms.
+
 #### `invitation.cancelled`
 
 Direction: backend -> frontend
@@ -906,6 +984,8 @@ Direction: backend -> frontend
 Emitted after `PATCH /projects/:projectId/invitations/:invitationId/cancel`.
 
 Payload: cancelled `Invitation`.
+
+Rooms: project room and invited user's dashboard rooms.
 
 ## Error Shape
 
@@ -925,3 +1005,284 @@ Common statuses from the current code:
 - `401`: missing/invalid access token, invalid refresh token, missing socket user
 - `403`: insufficient project role, non-member access, invitation belongs to another user, profile ownership checks
 - `404`: missing project participant, project not found, invitation not found/expired
+
+## Backend-Listened Realtime Events
+
+These Socket.IO events are emitted by the frontend and handled by the backend. Each handler uses the same auth token from `socket.auth.token`, applies the same role checks as the REST endpoint, returns the result in the acknowledgement, and then emits the matching backend -> frontend event to the relevant project and/or dashboard rooms.
+
+### Dashboard
+
+#### `dashboard.join`
+
+Payload: none.
+
+Ack:
+
+```ts
+{
+  invitations: Invitation[];
+}
+```
+
+Also emits `dashboard.invitations` to the joined socket.
+
+#### `dashboard.leave`
+
+Payload: none.
+
+Ack:
+
+```ts
+{
+  ok: true;
+}
+```
+
+### Projects
+
+#### `project.rename`
+
+Payload:
+
+```ts
+{
+  projectId: string;
+  name: string;
+}
+```
+
+Ack: updated `Project | null`.
+
+Broadcasts: `project.updated` and `project.renamed`.
+
+#### `project.delete`
+
+Payload:
+
+```ts
+{
+  projectId: string;
+}
+```
+
+Ack: deleted `Project | null`.
+
+Broadcasts: `project.deleted`.
+
+### Participants
+
+#### `participant.roles.update`
+
+Payload:
+
+```ts
+{
+  projectId: string;
+  memberId: string;
+  role: ProjectRole[];
+}
+```
+
+Ack: updated `ProjectMember`.
+
+Broadcasts: `participant.roles_updated`.
+
+#### `participant.remove`
+
+Payload:
+
+```ts
+{
+  projectId: string;
+  memberId: string;
+}
+```
+
+Ack: removed `ProjectMember | null`.
+
+Broadcasts: `participant.removed` and then `project.online_users`.
+
+### Tasks
+
+#### `task.create`
+
+Payload:
+
+```ts
+{
+  projectId: string;
+  title: string;
+  description?: string;
+  status?: TaskStatus;
+  priority?: TaskPriority;
+  position?: number;
+  assignees?: string[];
+  dueDate?: string | Date;
+}
+```
+
+Ack: created `Task`.
+
+Broadcasts: `task.created`.
+
+#### `task.update`
+
+Payload:
+
+```ts
+{
+  projectId: string;
+  taskId: string;
+  title?: string;
+  description?: string;
+  status?: TaskStatus;
+  priority?: TaskPriority;
+  position?: number;
+  assignees?: string[];
+  dueDate?: string | Date;
+}
+```
+
+Ack: updated `Task | null`.
+
+Broadcasts: `task.updated`.
+
+#### `task.move`
+
+Payload:
+
+```ts
+{
+  projectId: string;
+  taskId: string;
+  status?: TaskStatus;
+  position?: number;
+}
+```
+
+Ack: moved `Task | null`.
+
+Broadcasts: `task.moved`.
+
+#### `task.delete`
+
+Payload:
+
+```ts
+{
+  projectId: string;
+  taskId: string;
+}
+```
+
+Ack: deleted `Task | null`.
+
+Broadcasts: `task.deleted`.
+
+### Invitations
+
+#### `invitation.create`
+
+Payload:
+
+```ts
+{
+  projectId: string;
+  email: string;
+  role: InvitationRole;
+}
+```
+
+Ack: created `Invitation`.
+
+Broadcasts: `invitation.created`.
+
+#### `invitation.update_notification_status`
+
+Payload:
+
+```ts
+{
+  invitationId: string;
+  notificationStatus: NotificationStatus;
+}
+```
+
+Ack: updated `Invitation`.
+
+Broadcasts: none.
+
+#### `invitation.update`
+
+Payload:
+
+```ts
+{
+  projectId: string;
+  invitationId: string;
+  email?: string;
+  role?: InvitationRole;
+}
+```
+
+Ack: updated `Invitation`.
+
+Broadcasts: `invitation.updated`.
+
+#### `invitation.accept`
+
+Payload:
+
+```ts
+{
+  invitationId: string;
+}
+```
+
+Ack: accepted `Invitation`.
+
+Broadcasts: `invitation.accepted`.
+
+#### `invitation.decline`
+
+Payload:
+
+```ts
+{
+  invitationId: string;
+}
+```
+
+Ack: declined `Invitation`.
+
+Broadcasts: `invitation.declined`.
+
+#### `invitation.cancel`
+
+Payload:
+
+```ts
+{
+  projectId: string;
+  invitationId: string;
+}
+```
+
+Ack: cancelled `Invitation`.
+
+Broadcasts: `invitation.cancelled`.
+
+#### `invitation.delete`
+
+Payload:
+
+```ts
+{
+  projectId: string;
+  invitationId: string;
+}
+```
+
+Ack: cancelled `Invitation`.
+
+Broadcasts: `invitation.cancelled`.

@@ -1,4 +1,4 @@
-import { Module } from '@nestjs/common';
+import { Module, forwardRef } from '@nestjs/common';
 import { JwtModule } from '@nestjs/jwt';
 import { MongooseModule } from '@nestjs/mongoose';
 import { RealtimeModule } from '../realtime/realtime.module';
@@ -14,9 +14,10 @@ import { InvitationsService } from './invitations.service';
     MongooseModule.forFeature([{ name: Invitation.name, schema: InvitationSchema }]),
     UserProjectsModule,
     UsersModule,
-    RealtimeModule,
+    forwardRef(() => RealtimeModule),
   ],
   controllers: [InvitationsController],
   providers: [InvitationsService],
+  exports: [InvitationsService],
 })
 export class InvitationsModule {}

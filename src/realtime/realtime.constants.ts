@@ -8,3 +8,11 @@ export const REALTIME_GATEWAY_OPTIONS = {
 export function getProjectRoom(projectId: string) {
   return `project:${projectId}`;
 }
+
+export function getDashboardUserRoom(userId: string) {
+  return `dashboard:user:${userId}`;
+}
+
+export function getDashboardEmailRoom(email: string) {
+  return `dashboard:email:${email.toLowerCase()}`;
+}

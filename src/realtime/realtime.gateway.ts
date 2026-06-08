@@ -1,4 +1,4 @@
-import { Injectable, UnauthorizedException } from '@nestjs/common';
+import { Inject, Injectable, forwardRef } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import {
   ConnectedSocket,
@@ -9,31 +9,46 @@ import {
   WebSocketGateway,
   WebSocketServer,
 } from '@nestjs/websockets';
-import { Server, Socket } from 'socket.io';
-import { RealtimeEvent } from '../common/enums/domain.enums';
+import { Types } from 'mongoose';
+import { FrontendRealtimeEvent, RealtimeEvent } from '../common/enums/domain.enums';
+import { Project } from '../projects/projects.model';
+import { ProjectsService } from '../projects/projects.service';
 import { UserProject } from '../user-projects/user-projects.model';
 import { UserProjectsService } from '../user-projects/user-projects.service';
 import { getProjectRoom, REALTIME_GATEWAY_OPTIONS } from './realtime.constants';
+import {
+  getSocketUser,
+  OnlineUser,
+  ParticipantRemovedPayload,
+  ProjectIdPayload,
+  ProjectOnlineUsersPayload,
+  ProjectPresenceAck,
+  RealtimeRoomEmitter,
+  RealtimeServer,
+  RealtimeSocket,
+  RemoveParticipantPayload,
+  RenameProjectPayload,
+  requireSocketUser,
+  ServerEventPayload,
+  UpdateParticipantRolesPayload,
+} from './realtime.types';
 
-type SocketUser = {
-  id: string;
-  email: string;
-};
-
-type OnlineUser = {
-  userId: string;
-  membershipId: string;
+type PopulatedUser = {
+  _id: Types.ObjectId | string;
   name?: string;
   email?: string;
   avatar?: string;
-  socketCount: number;
+};
+
+type UserProjectWithMaybePopulatedUser = Omit<UserProject, 'userId'> & {
+  userId: Types.ObjectId | PopulatedUser;
 };
 
 @Injectable()
 @WebSocketGateway(REALTIME_GATEWAY_OPTIONS)
 export class RealtimeGateway implements OnGatewayConnection, OnGatewayDisconnect {
   @WebSocketServer()
-  server: Server;
+  server: RealtimeServer;
 
   private readonly socketProjects = new Map<string, Set<string>>();
   private readonly projectUserSockets = new Map<string, Map<string, Set<string>>>();
@@ -41,9 +56,11 @@ export class RealtimeGateway implements OnGatewayConnection, OnGatewayDisconnect
   constructor(
     private readonly jwtService: JwtService,
     private readonly userProjectsService: UserProjectsService,
+    @Inject(forwardRef(() => ProjectsService))
+    private readonly projectsService: ProjectsService,
   ) {}
 
-  async handleConnection(client: Socket) {
+  async handleConnection(client: RealtimeSocket) {
     const token = client.handshake.auth?.token;
 
     if (!token) {
@@ -61,8 +78,8 @@ export class RealtimeGateway implements OnGatewayConnection, OnGatewayDisconnect
     }
   }
 
-  async handleDisconnect(client: Socket) {
-    const user = this.getSocketUser(client);
+  async handleDisconnect(client: RealtimeSocket) {
+    const user = getSocketUser(client);
     const projectIds = this.socketProjects.get(client.id);
 
     if (!user || !projectIds?.size) {
@@ -78,9 +95,12 @@ export class RealtimeGateway implements OnGatewayConnection, OnGatewayDisconnect
     }
   }
 
-  @SubscribeMessage('project.join')
-  async joinProject(@ConnectedSocket() client: Socket, @MessageBody() body: { projectId: string }) {
-    const user = this.requireSocketUser(client);
+  @SubscribeMessage(FrontendRealtimeEvent.PROJECT_JOIN)
+  async joinProject(
+    @ConnectedSocket() client: RealtimeSocket,
+    @MessageBody() body: ProjectIdPayload,
+  ): Promise<ProjectPresenceAck> {
+    const user = requireSocketUser(client);
 
     await this.userProjectsService.requireMember(user.id, body.projectId);
     await client.join(getProjectRoom(body.projectId));
@@ -91,9 +111,12 @@ export class RealtimeGateway implements OnGatewayConnection, OnGatewayDisconnect
     return { projectId: body.projectId, onlineUsers };
   }
 
-  @SubscribeMessage('project.leave')
-  async leaveProject(@ConnectedSocket() client: Socket, @MessageBody() body: { projectId: string }) {
-    const user = this.requireSocketUser(client);
+  @SubscribeMessage(FrontendRealtimeEvent.PROJECT_LEAVE)
+  async leaveProject(
+    @ConnectedSocket() client: RealtimeSocket,
+    @MessageBody() body: ProjectIdPayload,
+  ): Promise<ProjectPresenceAck> {
+    const user = requireSocketUser(client);
 
     if (!this.socketProjects.get(client.id)?.has(body.projectId)) {
       return { projectId: body.projectId, onlineUsers: [] };
@@ -106,30 +129,77 @@ export class RealtimeGateway implements OnGatewayConnection, OnGatewayDisconnect
     return { projectId: body.projectId, onlineUsers };
   }
 
-  emitProjectUpdated(projectId: string, project: unknown) {
+  @SubscribeMessage(FrontendRealtimeEvent.PROJECT_RENAME)
+  renameProject(
+    @ConnectedSocket() client: RealtimeSocket,
+    @MessageBody() body: RenameProjectPayload,
+  ): Promise<Project | null> {
+    const user = requireSocketUser(client);
+
+    return this.projectsService.update(user.id, body.projectId, { name: body.name });
+  }
+
+  @SubscribeMessage(FrontendRealtimeEvent.PROJECT_DELETE)
+  deleteProject(
+    @ConnectedSocket() client: RealtimeSocket,
+    @MessageBody() body: ProjectIdPayload,
+  ): Promise<Project | null> {
+    const user = requireSocketUser(client);
+
+    return this.projectsService.delete(user.id, body.projectId);
+  }
+
+  @SubscribeMessage(FrontendRealtimeEvent.PARTICIPANT_UPDATE_ROLES)
+  updateParticipantRoles(
+    @ConnectedSocket() client: RealtimeSocket,
+    @MessageBody() body: UpdateParticipantRolesPayload,
+  ): Promise<UserProject> {
+    const user = requireSocketUser(client);
+
+    return this.projectsService.updateMemberRoles(user.id, body.projectId, body.memberId, body.role);
+  }
+
+  @SubscribeMessage(FrontendRealtimeEvent.PARTICIPANT_REMOVE)
+  removeParticipant(
+    @ConnectedSocket() client: RealtimeSocket,
+    @MessageBody() body: RemoveParticipantPayload,
+  ): Promise<UserProject | null> {
+    const user = requireSocketUser(client);
+
+    return this.projectsService.removeMember(user.id, body.projectId, body.memberId);
+  }
+
+  emitProjectUpdated(projectId: string, project: Project | null) {
     this.emitToProject(projectId, RealtimeEvent.PROJECT_UPDATED, project);
   }
 
-  emitProjectRenamed(projectId: string, project: unknown) {
+  emitProjectRenamed(projectId: string, project: Project) {
     this.emitToProject(projectId, RealtimeEvent.PROJECT_RENAMED, project);
   }
 
-  emitParticipantRolesUpdated(projectId: string, member: unknown) {
+  emitProjectDeleted(projectId: string, project: Project | null) {
+    this.emitToProject(projectId, RealtimeEvent.PROJECT_DELETED, project);
+  }
+
+  emitParticipantRolesUpdated(projectId: string, member: UserProject) {
     this.emitToProject(projectId, RealtimeEvent.PARTICIPANT_ROLES_UPDATED, member);
   }
 
-  async emitParticipantRemoved(projectId: string, memberId: string, member: unknown) {
-    this.emitToProject(projectId, RealtimeEvent.PARTICIPANT_REMOVED, {
+  async emitParticipantRemoved(projectId: string, memberId: string, member: UserProject | null) {
+    const payload: ParticipantRemovedPayload = {
       projectId,
       userId: memberId,
       member,
-    });
+    };
+
+    this.emitToProject(projectId, RealtimeEvent.PARTICIPANT_REMOVED, payload);
 
     await this.removeUserFromProjectRoom(projectId, memberId);
   }
 
-  emitToProject(projectId: string, event: RealtimeEvent, payload: unknown) {
-    this.server?.to(getProjectRoom(projectId)).emit(event, payload);
+  emitToProject<TEvent extends RealtimeEvent>(projectId: string, event: TEvent, payload: ServerEventPayload<TEvent>) {
+    const room = this.server?.to(getProjectRoom(projectId)) as RealtimeRoomEmitter | undefined;
+    room?.emit(event, payload);
   }
 
   private async removeUserFromProjectRoom(projectId: string, userId: string) {
@@ -227,14 +297,12 @@ export class RealtimeGateway implements OnGatewayConnection, OnGatewayDisconnect
       .filter((user): user is OnlineUser => Boolean(user));
   }
 
-  private toOnlineUser(member: UserProject, onlineUserIds: Map<string, Set<string>>): OnlineUser | null {
-    const user = member.userId as unknown as {
-      _id: unknown;
-      name?: string;
-      email?: string;
-      avatar?: string;
-    };
-    const userId = String(user._id ?? member.userId);
+  private toOnlineUser(
+    member: UserProjectWithMaybePopulatedUser,
+    onlineUserIds: Map<string, Set<string>>,
+  ): OnlineUser | null {
+    const user = member.userId instanceof Types.ObjectId ? undefined : member.userId;
+    const userId = String(user?._id ?? member.userId);
     const sockets = onlineUserIds.get(userId);
 
     if (!sockets?.size) {
@@ -244,24 +312,10 @@ export class RealtimeGateway implements OnGatewayConnection, OnGatewayDisconnect
     return {
       userId,
       membershipId: member.id,
-      name: user.name,
-      email: user.email,
-      avatar: user.avatar,
+      name: user?.name,
+      email: user?.email,
+      avatar: user?.avatar,
       socketCount: sockets.size,
     };
-  }
-
-  private getSocketUser(client: Socket): SocketUser | undefined {
-    return client.data.user;
-  }
-
-  private requireSocketUser(client: Socket): SocketUser {
-    const user = this.getSocketUser(client);
-
-    if (!user) {
-      throw new UnauthorizedException('Missing socket user');
-    }
-
-    return user;
   }
 }
