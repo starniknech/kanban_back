@@ -6,7 +6,8 @@ import { UploadedFile } from '../common/types/uploaded-file.type';
 
 @Injectable()
 export class FileService {
-  private readonly uploadDir = path.join(__dirname, '..', '..', 'uploads', 'avatars');
+  private readonly uploadRoot = path.join(process.cwd(), 'uploads');
+  private readonly uploadDir = path.join(this.uploadRoot, 'avatars');
   private readonly defaultAvatar = '/uploads/avatars/default-ava.webp';
 
   constructor() {
@@ -35,7 +36,12 @@ export class FileService {
   }
 
   async deleteFile(avatarPath: string): Promise<void> {
-    const fullPath = path.join(__dirname, '..', '..', avatarPath.replace('/uploads', 'uploads'));
+    const relativePath = avatarPath.replace(/^\/uploads\/?/, '');
+    const fullPath = path.resolve(this.uploadRoot, relativePath);
+
+    if (!fullPath.startsWith(this.uploadRoot)) {
+      return;
+    }
 
     try {
       if (fs.existsSync(fullPath)) {

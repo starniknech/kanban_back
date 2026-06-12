@@ -26,6 +26,16 @@ export enum NotificationStatus {
   UNREAD = 'unread',
 }
 
+export enum ErrorEnum {
+  PENDING_INVITATION_ALREADY_EXISTS = 'PENDING_INVITATION_ALREADY_EXISTS',
+  USER_ALREADY_PROJECT_MEMBER = 'USER_ALREADY_PROJECT_MEMBER',
+}
+
+export enum ErrorMessageEnum {
+  PENDING_INVITATION_ALREADY_EXISTS = 'User already has a pending invitation to this project',
+  USER_ALREADY_PROJECT_MEMBER = 'User is already a project member',
+}
+
 export enum TaskStatus {
   TODO = 'todo',
   IN_PROGRESS = 'in_progress',
@@ -41,6 +51,7 @@ export enum TaskPriority {
 }
 
 export enum RealtimeEvent {
+  ERROR = 'error',
   DASHBOARD_INVITATIONS = 'dashboard.invitations',
   PROJECT_ONLINE_USERS = 'project.online_users',
   PROJECT_UPDATED = 'project.updated',

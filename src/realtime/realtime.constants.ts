@@ -9,6 +9,10 @@ export function getProjectRoom(projectId: string) {
   return `project:${projectId}`;
 }
 
+export function getUserRoom(userId: string) {
+  return `user:${userId}`;
+}
+
 export function getDashboardUserRoom(userId: string) {
   return `dashboard:user:${userId}`;
 }

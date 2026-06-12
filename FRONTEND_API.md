@@ -29,6 +29,20 @@ type InvitationStatus = 'pending' | 'accepted' | 'declined' | 'expired' | 'cance
 type NotificationStatus = 'read' | 'unread';
 type TaskStatus = 'todo' | 'in_progress' | 'review' | 'done';
 type TaskPriority = 'low' | 'medium' | 'high' | 'urgent';
+type ErrorEnum = 'PENDING_INVITATION_ALREADY_EXISTS' | 'USER_ALREADY_PROJECT_MEMBER';
+type ErrorMessageEnum =
+  | 'User already has a pending invitation to this project'
+  | 'User is already a project member';
+```
+
+### Error Payload
+
+```ts
+type ErrorPayload = {
+  error: ErrorEnum;
+  message: ErrorMessageEnum;
+  statusCode: number;
+};
 ```
 
 ### User
@@ -585,9 +599,28 @@ Validation:
 
 Response: `Invitation` with `status: 'pending'` and `expiresAt` 7 days after creation.
 
+Possible HTTP `409` errors:
+
+```json
+{
+  "error": "PENDING_INVITATION_ALREADY_EXISTS",
+  "message": "User already has a pending invitation to this project",
+  "statusCode": 409
+}
+```
+
+```json
+{
+  "error": "USER_ALREADY_PROJECT_MEMBER",
+  "message": "User is already a project member",
+  "statusCode": 409
+}
+```
+
 Realtime side effect:
 
 - Emits `invitation.created` to the project room with the created invitation.
+- Emits `error` to the requesting user's private realtime room when invitation creation fails with one of the `409` errors above.
 
 ### `GET /projects/:projectId/invitations`
 
@@ -937,6 +970,22 @@ Payload:
 
 The removed user's sockets receive this event before the backend removes them from the project room.
 
+#### `error`
+
+Direction: backend -> frontend
+
+Emitted to the requesting user's private realtime room when invitation creation or update fails because the invitee already has a pending invitation or already belongs to the project.
+
+Payload: `ErrorPayload`.
+
+Example:
+
+```ts
+socket.on('error', (payload: ErrorPayload) => {
+  showSnackbar(payload.message);
+});
+```
+
 #### `invitation.created`
 
 Direction: backend -> frontend
@@ -1004,6 +1053,7 @@ Common statuses from the current code:
 - `400`: validation failures or duplicate registration email
 - `401`: missing/invalid access token, invalid refresh token, missing socket user
 - `403`: insufficient project role, non-member access, invitation belongs to another user, profile ownership checks
+- `409`: pending invitation already exists for this user in the project, or user is already a project member
 - `404`: missing project participant, project not found, invitation not found/expired
 
 ## Backend-Listened Realtime Events
@@ -1195,7 +1245,7 @@ Payload:
 
 Ack: created `Invitation`.
 
-Broadcasts: `invitation.created`.
+Broadcasts: `invitation.created`; emits `error` to the requesting user's private realtime room for typed `409` invitation errors.
 
 #### `invitation.update_notification_status`
 
@@ -1227,7 +1277,7 @@ Payload:
 
 Ack: updated `Invitation`.
 
-Broadcasts: `invitation.updated`.
+Broadcasts: `invitation.updated`; emits `error` to the requesting user's private realtime room for typed `409` invitation errors.
 
 #### `invitation.accept`
 
