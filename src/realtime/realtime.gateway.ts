@@ -15,7 +15,7 @@ import { Project } from '../projects/projects.model';
 import { ProjectsService } from '../projects/projects.service';
 import { UserProject } from '../user-projects/user-projects.model';
 import { UserProjectsService } from '../user-projects/user-projects.service';
-import { getProjectRoom, REALTIME_GATEWAY_OPTIONS } from './realtime.constants';
+import { getProjectRoom, getUserRoom, REALTIME_GATEWAY_OPTIONS } from './realtime.constants';
 import {
   getSocketUser,
   OnlineUser,
@@ -73,6 +73,7 @@ export class RealtimeGateway implements OnGatewayConnection, OnGatewayDisconnect
         secret: process.env.JWT_ACCESS_SECRET || 'dev-access-secret',
       });
       client.data.user = { id: payload.sub, email: payload.email };
+      await client.join(getUserRoom(payload.sub));
     } catch {
       client.disconnect();
     }

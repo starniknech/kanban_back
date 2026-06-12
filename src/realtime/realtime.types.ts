@@ -5,6 +5,8 @@ import { Project } from '../projects/projects.model';
 import { Task } from '../tasks/tasks.model';
 import { UserProject } from '../user-projects/user-projects.model';
 import {
+  ErrorEnum,
+  ErrorMessageEnum,
   FrontendRealtimeEvent,
   InvitationRole,
   NotificationStatus,
@@ -22,6 +24,12 @@ export type SocketUser = {
 export type RealtimeSocketData = {
   user?: SocketUser;
 };
+
+export interface ErrorPayload {
+  error: ErrorEnum;
+  message: ErrorMessageEnum;
+  statusCode: number;
+}
 
 export type DashboardInvitationsPayload = {
   invitations: Invitation[];
@@ -119,6 +127,7 @@ export type ParticipantRemovedPayload = ProjectIdPayload & {
 };
 
 export type ServerToClientEvents = {
+  [RealtimeEvent.ERROR]: (payload: ErrorPayload) => void;
   [RealtimeEvent.DASHBOARD_INVITATIONS]: (payload: DashboardInvitationsPayload) => void;
   [RealtimeEvent.PROJECT_ONLINE_USERS]: (payload: ProjectOnlineUsersPayload) => void;
   [RealtimeEvent.PROJECT_UPDATED]: (payload: Project | null) => void;

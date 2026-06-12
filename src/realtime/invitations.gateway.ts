@@ -7,12 +7,14 @@ import {
   getDashboardEmailRoom,
   getDashboardUserRoom,
   getProjectRoom,
+  getUserRoom,
   REALTIME_GATEWAY_OPTIONS,
 } from './realtime.constants';
 import {
   CancelInvitationPayload,
   CreateInvitationPayload,
   DashboardInvitationsPayload,
+  ErrorPayload,
   InvitationActionPayload,
   RealtimeRoomEmitter,
   RealtimeServer,
@@ -148,6 +150,11 @@ export class RealtimeInvitationsGateway {
   emitCancelled(projectId: string, invitation: Invitation) {
     this.emitToProject(projectId, RealtimeEvent.INVITATION_CANCELLED, invitation);
     this.emitToInvitationDashboard(invitation, RealtimeEvent.INVITATION_CANCELLED, invitation);
+  }
+
+  emitError(userId: string, payload: ErrorPayload) {
+    const room = this.server?.to(getUserRoom(userId)) as RealtimeRoomEmitter | undefined;
+    room?.emit(RealtimeEvent.ERROR, payload);
   }
 
   private cancelProjectInvitation(client: RealtimeSocket, body: CancelInvitationPayload): Promise<Invitation> {

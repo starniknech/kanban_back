@@ -1,10 +1,18 @@
-import { ForbiddenException, Inject, Injectable, NotFoundException, forwardRef } from '@nestjs/common';
+import { ConflictException, ForbiddenException, Inject, Injectable, NotFoundException, forwardRef } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
-import { Model } from 'mongoose';
+import { Model, Types } from 'mongoose';
 import { ADMIN_ROLES, MEMBER_ROLES } from '../common/auth/role-utils';
-import { InvitationRole, InvitationStatus, NotificationStatus, ProjectRole } from '../common/enums/domain.enums';
+import {
+  ErrorEnum,
+  ErrorMessageEnum,
+  InvitationRole,
+  InvitationStatus,
+  NotificationStatus,
+  ProjectRole,
+} from '../common/enums/domain.enums';
 import { toObjectId } from '../common/utils/object-id';
 import { RealtimeInvitationsGateway } from '../realtime/invitations.gateway';
+import type { ErrorPayload } from '../realtime/realtime.types';
 import { UserProjectsService } from '../user-projects/user-projects.service';
 import { UsersService } from '../users/users.service';
 import { Invitation } from './invitations.model';
@@ -28,11 +36,16 @@ export class InvitationsService {
     }
 
     const invitedUser = await this.usersService.findByEmail(data.email);
+    const email = data.email.toLowerCase();
+
+    await this.ensureUserIsNotProjectMember(userId, projectId, invitedUser?.id);
+    await this.ensureNoPendingInvitation(userId, projectId, email, invitedUser?.id);
+
     const invitation = await this.invitationModel.create({
       projectId: toObjectId(projectId),
       invitedByUserId: toObjectId(userId),
       invitedUserId: invitedUser?._id ?? null,
-      email: data.email.toLowerCase(),
+      email,
       role: data.role,
       status: InvitationStatus.PENDING,
       notificationStatus: NotificationStatus.UNREAD,
@@ -75,7 +88,12 @@ export class InvitationsService {
 
     if (data.email !== undefined) {
       const invitedUser = await this.usersService.findByEmail(data.email);
-      invitation.email = data.email.toLowerCase();
+      const email = data.email.toLowerCase();
+
+      await this.ensureUserIsNotProjectMember(userId, projectId, invitedUser?.id);
+      await this.ensureNoPendingInvitation(userId, projectId, email, invitedUser?.id, invitationId);
+
+      invitation.email = email;
       invitation.invitedUserId = invitedUser ? toObjectId(invitedUser.id) : null;
     }
 
@@ -196,5 +214,60 @@ export class InvitationsService {
     }
 
     return invitation;
+  }
+
+  private async ensureNoPendingInvitation(
+    userId: string,
+    projectId: string,
+    email: string,
+    invitedUserId?: string | Types.ObjectId,
+    excludeInvitationId?: string,
+  ): Promise<void> {
+    const recipientConditions: Record<string, unknown>[] = [{ email }];
+
+    if (invitedUserId) {
+      recipientConditions.push({ invitedUserId: toObjectId(invitedUserId) });
+    }
+
+    const existingInvitation = await this.invitationModel
+      .findOne({
+        projectId: toObjectId(projectId),
+        status: InvitationStatus.PENDING,
+        $or: recipientConditions,
+        ...(excludeInvitationId ? { _id: { $ne: toObjectId(excludeInvitationId) } } : {}),
+      })
+      .exec();
+
+    if (existingInvitation) {
+      this.throwConflictError(userId, {
+        statusCode: 409,
+        message: ErrorMessageEnum.PENDING_INVITATION_ALREADY_EXISTS,
+        error: ErrorEnum.PENDING_INVITATION_ALREADY_EXISTS,
+      });
+    }
+  }
+
+  private async ensureUserIsNotProjectMember(
+    userId: string,
+    projectId: string,
+    invitedUserId?: string | Types.ObjectId,
+  ): Promise<void> {
+    if (!invitedUserId) {
+      return;
+    }
+
+    const membership = await this.userProjectsService.findMembership(invitedUserId.toString(), projectId);
+
+    if (membership) {
+      this.throwConflictError(userId, {
+        statusCode: 409,
+        message: ErrorMessageEnum.USER_ALREADY_PROJECT_MEMBER,
+        error: ErrorEnum.USER_ALREADY_PROJECT_MEMBER,
+      });
+    }
+  }
+
+  private throwConflictError(userId: string, payload: ErrorPayload) {
+    this.realtimeInvitationsGateway.emitError(userId, payload);
   }
 }
